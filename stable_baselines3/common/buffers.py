@@ -6,7 +6,7 @@ import numpy as np
 import torch as th
 from gym import spaces
 
-from stable_baselines3.common.preprocessing import get_action_dim, get_obs_shape
+from stable_baselines3.common.preprocessing import get_action_dim, get_obs_shape, get_obs_dtype
 from stable_baselines3.common.type_aliases import (
     DictReplayBufferSamples,
     DictRolloutBufferSamples,
@@ -47,6 +47,7 @@ class BaseBuffer(ABC):
         self.observation_space = observation_space
         self.action_space = action_space
         self.obs_shape = get_obs_shape(observation_space)
+        self.obs_dtype = get_obs_dtype(observation_space)
 
         self.action_dim = get_action_dim(action_space)
         self.pos = 0
@@ -189,13 +190,13 @@ class ReplayBuffer(BaseBuffer):
 
         self.optimize_memory_usage = optimize_memory_usage
 
-        self.observations = np.zeros((self.buffer_size, self.n_envs) + self.obs_shape, dtype=observation_space.dtype)
+        self.observations = np.zeros((self.buffer_size, self.n_envs) + self.obs_shape, dtype=self.obs_dtype)
 
         if optimize_memory_usage:
             # `observations` contains also the next observation
             self.next_observations = None
         else:
-            self.next_observations = np.zeros((self.buffer_size, self.n_envs) + self.obs_shape, dtype=observation_space.dtype)
+            self.next_observations = np.zeros((self.buffer_size, self.n_envs) + self.obs_shape, dtype=self.obs_dtype)
 
         self.actions = np.zeros((self.buffer_size, self.n_envs, self.action_dim), dtype=action_space.dtype)
 
@@ -502,14 +503,12 @@ class DictReplayBuffer(ReplayBuffer):
         # disabling as this adds quite a bit of complexity
         # https://github.com/DLR-RM/stable-baselines3/pull/243#discussion_r531535702
         self.optimize_memory_usage = optimize_memory_usage
-
         self.observations = {
-            key: np.zeros((self.buffer_size, self.n_envs) + _obs_shape) for key, _obs_shape in self.obs_shape.items()
+            key: np.zeros((self.buffer_size, self.n_envs) + self.obs_shape[key], self.obs_dtype[key]) for key in self.obs_shape.keys()
         }
         self.next_observations = {
-            key: np.zeros((self.buffer_size, self.n_envs) + _obs_shape) for key, _obs_shape in self.obs_shape.items()
+            key: np.zeros((self.buffer_size, self.n_envs) + self.obs_shape[key], self.obs_dtype[key]) for key in self.obs_shape.keys()
         }
-
         # only 1 env is supported
         self.actions = np.zeros((self.buffer_size, self.action_dim), dtype=action_space.dtype)
         self.rewards = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
