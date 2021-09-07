@@ -6,7 +6,6 @@ import torch as th
 from gym import spaces
 from torch.nn import functional as F
 
-from stable_baselines3.common import logger
 from stable_baselines3.common.on_policy_algorithm import OnPolicyAlgorithm
 from stable_baselines3.common.policies import ActorCriticPolicy
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
@@ -71,7 +70,7 @@ class PPO(OnPolicyAlgorithm):
         env: Union[GymEnv, str],
         learning_rate: Union[float, Schedule] = 3e-4,
         n_steps: int = 2048,
-        batch_size: Optional[int] = 64,
+        batch_size: int = 64,
         n_epochs: int = 10,
         gamma: float = 0.99,
         gae_lambda: float = 0.95,
@@ -167,6 +166,8 @@ class PPO(OnPolicyAlgorithm):
         """
         Update policy using the currently gathered rollout buffer.
         """
+        # Switch to train mode (this affects batch norm / dropout)
+        self.policy.set_training_mode(True)
         # Update optimizer learning rate
         self._update_learning_rate(self.policy.optimizer)
         # Compute current clip range
@@ -269,20 +270,20 @@ class PPO(OnPolicyAlgorithm):
         explained_var = explained_variance(self.rollout_buffer.values.flatten(), self.rollout_buffer.returns.flatten())
 
         # Logs
-        logger.record("train/entropy_loss", np.mean(entropy_losses))
-        logger.record("train/policy_gradient_loss", np.mean(pg_losses))
-        logger.record("train/value_loss", np.mean(value_losses))
-        logger.record("train/approx_kl", np.mean(approx_kl_divs))
-        logger.record("train/clip_fraction", np.mean(clip_fractions))
-        logger.record("train/loss", loss.item())
-        logger.record("train/explained_variance", explained_var)
+        self.logger.record("train/entropy_loss", np.mean(entropy_losses))
+        self.logger.record("train/policy_gradient_loss", np.mean(pg_losses))
+        self.logger.record("train/value_loss", np.mean(value_losses))
+        self.logger.record("train/approx_kl", np.mean(approx_kl_divs))
+        self.logger.record("train/clip_fraction", np.mean(clip_fractions))
+        self.logger.record("train/loss", loss.item())
+        self.logger.record("train/explained_variance", explained_var)
         if hasattr(self.policy, "log_std"):
-            logger.record("train/std", th.exp(self.policy.log_std).mean().item())
+            self.logger.record("train/std", th.exp(self.policy.log_std).mean().item())
 
-        logger.record("train/n_updates", self._n_updates, exclude="tensorboard")
-        logger.record("train/clip_range", clip_range)
+        self.logger.record("train/n_updates", self._n_updates, exclude="tensorboard")
+        self.logger.record("train/clip_range", clip_range)
         if self.clip_range_vf is not None:
-            logger.record("train/clip_range_vf", clip_range_vf)
+            self.logger.record("train/clip_range_vf", clip_range_vf)
 
     def learn(
         self,
