@@ -557,7 +557,6 @@ class OffPolicyAlgorithm(BaseAlgorithm):
         while should_collect_more_steps(train_freq, num_collected_steps, num_collected_episodes):
             done = False
             episode_reward, episode_timesteps = 0.0, 0
-
             while not done:
 
                 if self.use_sde and self.sde_sample_freq > 0 and num_collected_steps % self.sde_sample_freq == 0:
@@ -585,8 +584,16 @@ class OffPolicyAlgorithm(BaseAlgorithm):
                 # Retrieve reward and episode length if using Monitor wrapper
                 self._update_info_buffer(infos, done)
 
+                # Disambiguate between done due to terminal state vs. time horizon
+                # 'done' in replay_buffer is used to determine whether to apply bootstrapping for TD target
+                # Replace with 'terminal'
+                if infos[0].get('TimeLimit.truncated'):
+                    terminal = done * False
+                else:
+                    terminal = done
+
                 # Store data in replay buffer (normalized action and unnormalized observation)
-                self._store_transition(replay_buffer, buffer_action, new_obs, reward, done, infos)
+                self._store_transition(replay_buffer, buffer_action, new_obs, reward, terminal, infos)
 
                 self._update_current_progress_remaining(self.num_timesteps, self._total_timesteps)
 
