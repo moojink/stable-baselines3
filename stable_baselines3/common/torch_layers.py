@@ -22,11 +22,11 @@ class BaseFeaturesExtractor(nn.Module):
         super(BaseFeaturesExtractor, self).__init__()
         assert features_dim > 0
         self._observation_space = observation_space
-        self._features_dim = features_dim
-
-    @property
-    def features_dim(self) -> int:
-        return self._features_dim
+        # self._features_dim = features_dim
+        self.features_dim = features_dim
+    # @property
+    # def features_dim(self) -> int:
+    #     return self._features_dim
 
     def forward(self, observations: th.Tensor) -> th.Tensor:
         raise NotImplementedError()
