@@ -576,7 +576,7 @@ def configure(folder: Optional[str] = None, format_strings: Optional[List[str]] 
     if format_strings is None:
         format_strings = os.getenv("SB3_LOG_FORMAT", "stdout,log,csv").split(",")
 
-    format_strings = list(filter(None, format_strings))
+    format_strings = list(filter(None, format_strings.split(',')))
     output_formats = [make_output_format(f, folder, log_suffix) for f in format_strings]
 
     logger = Logger(folder=folder, output_formats=output_formats)
