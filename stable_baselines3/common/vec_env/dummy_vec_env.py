@@ -29,6 +29,8 @@ class DummyVecEnv(VecEnv):
         self.keys, shapes, dtypes = obs_space_info(obs_space)
 
         self.buf_obs = OrderedDict([(k, np.zeros((self.num_envs,) + tuple(shapes[k]), dtype=dtypes[k])) for k in self.keys])
+        self.buf_terminateds = np.zeros((self.num_envs,), dtype=bool)
+        self.buf_truncateds = np.zeros((self.num_envs,), dtype=bool)
         self.buf_dones = np.zeros((self.num_envs,), dtype=bool)
         self.buf_rews = np.zeros((self.num_envs,), dtype=np.float32)
         self.buf_infos = [{} for _ in range(self.num_envs)]
@@ -40,15 +42,16 @@ class DummyVecEnv(VecEnv):
 
     def step_wait(self) -> VecEnvStepReturn:
         for env_idx in range(self.num_envs):
-            obs, self.buf_rews[env_idx], self.buf_dones[env_idx], self.buf_infos[env_idx] = self.envs[env_idx].step(
+            obs, self.buf_rews[env_idx], self.buf_terminateds[env_idx], self.buf_truncateds[env_idx], self.buf_infos[env_idx] = self.envs[env_idx].step(
                 self.actions[env_idx]
             )
+            self.buf_dones[env_idx] = self.buf_terminateds[env_idx] or self.buf_truncateds[env_idx]
             if self.buf_dones[env_idx]:
                 # save final observation where user can get it, then reset
                 self.buf_infos[env_idx]["terminal_observation"] = obs
-                obs = self.envs[env_idx].reset()
+                obs, info = self.envs[env_idx].reset()
             self._save_obs(env_idx, obs)
-        return (self._obs_from_buf(), np.copy(self.buf_rews), np.copy(self.buf_dones), deepcopy(self.buf_infos))
+        return (self._obs_from_buf(), np.copy(self.buf_rews), np.copy(self.buf_terminateds), np.copy(self.buf_truncateds), deepcopy(self.buf_infos))
 
     def seed(self, seed: Optional[int] = None) -> List[Union[None, int]]:
         seeds = list()
@@ -58,33 +61,28 @@ class DummyVecEnv(VecEnv):
 
     def reset(self) -> VecEnvObs:
         for env_idx in range(self.num_envs):
-            obs = self.envs[env_idx].reset()
+            obs, self.buf_infos[env_idx] = self.envs[env_idx].reset()
             self._save_obs(env_idx, obs)
-        return self._obs_from_buf()
+        return self._obs_from_buf(), deepcopy(self.buf_infos)
 
     def close(self) -> None:
         for env in self.envs:
             env.close()
 
     def get_images(self) -> Sequence[np.ndarray]:
-        return [env.render(mode="rgb_array") for env in self.envs]
+        return [env.render() for env in self.envs]
 
-    def render(self, mode: str = "human") -> Optional[np.ndarray]:
+    def render(self) -> Optional[np.ndarray]:
         """
         Gym environment rendering. If there are multiple environments then
         they are tiled together in one image via ``BaseVecEnv.render()``.
         Otherwise (if ``self.num_envs == 1``), we pass the render call directly to the
         underlying environment.
-
-        Therefore, some arguments such as ``mode`` will have values that are valid
-        only when ``num_envs == 1``.
-
-        :param mode: The rendering type.
         """
         if self.num_envs == 1:
-            return self.envs[0].render(mode=mode)
+            return self.envs[0].render()
         else:
-            return super().render(mode=mode)
+            return super().render()
 
     def _save_obs(self, env_idx: int, obs: VecEnvObs) -> None:
         for key in self.keys:
